@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "=== Google Antigravity Desktop Installer ==="
+echo "=== Google Antigravity IDE Installer ==="
 
 # --- Dependencies ---
 echo "[1/4] Installing dependencies..."
@@ -10,8 +10,8 @@ sudo apt install -y ca-certificates curl tar desktop-file-utils python3
 
 # --- Helper script ---
 echo "[2/4] Creating update helper..."
-helper_path='/usr/local/bin/update-antigravity'
-helper_marker='# LinuxCapable-Managed: google-antigravity-desktop-helper-v1'
+helper_path='/usr/local/bin/update-antigravity-ide'
+helper_marker='# LinuxCapable-Managed: google-antigravity-ide-helper-v1'
 
 if [ -L "$helper_path" ] || { [ -e "$helper_path" ] && [ ! -f "$helper_path" ]; }; then
   printf '%s is not a regular helper file; move it before continuing.\n' "$helper_path" >&2
@@ -20,10 +20,8 @@ fi
 recognized_old_helper=no
 if [ -f "$helper_path" ] &&
    sudo grep -Fqx 'download_page="https://antigravity.google/download"' "$helper_path" &&
-   sudo grep -Fqx 'install_root="/opt/antigravity"' "$helper_path" &&
-   sudo grep -Fqx 'command_link="/usr/local/bin/antigravity"' "$helper_path"; then
-  recognized_old_helper=yes
-elif [ -f "$helper_path" ] && sudo grep -Fq 'antigravity-auto-updater-974169037036' "$helper_path"; then
+   sudo grep -Fqx 'install_root="/opt/antigravity-ide"' "$helper_path" &&
+   sudo grep -Fqx 'command_link="/usr/local/bin/antigravity-ide"' "$helper_path"; then
   recognized_old_helper=yes
 fi
 if [ -f "$helper_path" ] &&
@@ -33,24 +31,26 @@ if [ -f "$helper_path" ] &&
   exit 1
 fi
 
-helper_tmp=$(mktemp "${TMPDIR:-/tmp}/update-antigravity.XXXXXX")
+helper_tmp=$(mktemp "${TMPDIR:-/tmp}/update-antigravity-ide.XXXXXX")
 trap 'rm -f -- "$helper_tmp"' EXIT
 cat >"$helper_tmp" <<'EOF'
 #!/usr/bin/env bash
-# LinuxCapable-Managed: google-antigravity-desktop-helper-v1
+# LinuxCapable-Managed: google-antigravity-ide-helper-v1
 set -euo pipefail
 
 if [ "$(id -u)" -ne 0 ]; then
-	echo "Run with sudo: sudo update-antigravity" >&2
+	echo "Run with sudo: sudo update-antigravity-ide" >&2
 	exit 1
 fi
 
 download_page="https://antigravity.google/download"
-install_root="/opt/antigravity"
-command_link="/usr/local/bin/antigravity"
-desktop_file="/usr/share/applications/antigravity.desktop"
-icon_file="/usr/share/icons/hicolor/512x512/apps/antigravity.png"
-managed_id="linuxcapable-antigravity-desktop-v1"
+install_root="/opt/antigravity-ide"
+command_link="/usr/local/bin/antigravity-ide"
+desktop_file="/usr/share/applications/antigravity-ide.desktop"
+icon_file="/usr/share/icons/hicolor/512x512/apps/antigravity-ide.png"
+archive_top_dir="Antigravity IDE"
+install_dir="Antigravity-IDE"
+managed_id="linuxcapable-antigravity-ide-v1"
 root_marker="$install_root/.linuxcapable-managed"
 
 case "$(uname -m)" in
@@ -64,19 +64,10 @@ esac
 
 for required_command in curl tar python3 desktop-file-validate; do
 	if ! command -v "$required_command" >/dev/null 2>&1; then
-		echo "$required_command is required to install Antigravity." >&2
+		echo "$required_command is required to install Antigravity IDE." >&2
 		exit 1
 	fi
 done
-
-legacy_package_state=$(dpkg-query -W -f='${db:Status-Abbrev}' antigravity 2>/dev/null || true)
-case "$legacy_package_state" in
-'' | ?n* | ?c*) ;;
-*)
-	printf 'Remove the legacy Antigravity APT package before installing the current desktop app (state: %s).\n' "$legacy_package_state" >&2
-	exit 1
-	;;
-esac
 
 command_preexisting=no
 command_target_before=''
@@ -106,8 +97,8 @@ elif [ -f "$desktop_file" ]; then
 	if grep -Fqx "X-LinuxCapable-Managed=$managed_id" "$desktop_file"; then
 		:
 	elif grep -Fqx "Exec=$command_link %U" "$desktop_file" &&
-		grep -Fqx 'Icon=antigravity' "$desktop_file" &&
-		grep -Fqx 'StartupWMClass=Antigravity' "$desktop_file"; then
+		grep -Fqx 'Icon=antigravity-ide' "$desktop_file" &&
+		grep -Fqx 'StartupWMClass=antigravity-ide' "$desktop_file"; then
 		desktop_legacy_owned=yes
 	else
 		echo "$desktop_file is not a recognized LinuxCapable launcher. Move it before rerunning this helper." >&2
@@ -171,10 +162,10 @@ cleanup() {
 			if mv -- "$backup_root" "$install_root"; then
 				backup_root=''
 			else
-				printf 'The previous Antigravity install remains at %s; restore it before retrying.\n' "$backup_root" >&2
+				printf 'The previous Antigravity IDE install remains at %s; restore it before retrying.\n' "$backup_root" >&2
 			fi
 		else
-			printf 'The previous Antigravity install remains at %s because %s is occupied.\n' "$backup_root" "$install_root" >&2
+			printf 'The previous Antigravity IDE install remains at %s because %s is occupied.\n' "$backup_root" "$install_root" >&2
 		fi
 	fi
 	if [ -n "$stage_root" ] && [ -d "$stage_root" ]; then
@@ -190,14 +181,13 @@ cleanup() {
 }
 trap cleanup EXIT
 
-tmpdir=$(mktemp -d /var/tmp/antigravity.XXXXXX)
+tmpdir=$(mktemp -d /var/tmp/antigravity-ide.XXXXXX)
 download_html="$tmpdir/download.html"
-archive="$tmpdir/Antigravity.tar.gz"
+archive="$tmpdir/Antigravity-IDE.tar.gz"
 archive_list="$tmpdir/archive-list.txt"
-icon_staged="$tmpdir/antigravity.png"
-desktop_staged="$tmpdir/antigravity-staged.desktop"
-desktop_backup="$tmpdir/antigravity.desktop.before"
-icon_backup="$tmpdir/antigravity.png.before"
+desktop_staged="$tmpdir/antigravity-ide-staged.desktop"
+desktop_backup="$tmpdir/antigravity-ide.desktop.before"
+icon_backup="$tmpdir/antigravity-ide.png.before"
 if [ "$desktop_preexisting" = yes ]; then
 	cp -a -- "$desktop_file" "$desktop_backup"
 fi
@@ -232,10 +222,10 @@ platform = sys.argv[3]
 parser = LinkParser()
 parser.feed(html)
 pattern = re.compile(
-    r"https://storage\.googleapis\.com/antigravity-public/antigravity-hub/"
+    r"https://edgedl\.me\.gvt1\.com/edgedl/release2/j0qc3/antigravity/stable/"
     r"([0-9]+\.[0-9]+\.[0-9]+)-[0-9]+/"
     + re.escape(platform)
-    + r"/Antigravity\.tar\.gz"
+    + r"/Antigravity%20IDE\.tar\.gz"
 )
 matches = []
 for href in parser.hrefs:
@@ -245,7 +235,7 @@ for href in parser.hrefs:
         matches.append((match.group(1), url))
 
 if len(matches) != 1:
-    raise SystemExit(f"Could not find a download for {platform}")
+    raise SystemExit(f"Could not find an IDE download for {platform}")
 
 print(*matches[0], sep="\t")
 PY
@@ -253,18 +243,14 @@ PY
 IFS=$'\t' read -r version download_url <<<"$download_fields"
 
 if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
-   [[ ! "$download_url" =~ ^https://storage\.googleapis\.com/antigravity-public/antigravity-hub/[0-9]+\.[0-9]+\.[0-9]+-[0-9]+/${platform}/Antigravity\.tar\.gz$ ]]; then
-	echo "Could not parse the Antigravity download page." >&2
+   [[ ! "$download_url" =~ ^https://edgedl\.me\.gvt1\.com/edgedl/release2/j0qc3/antigravity/stable/[0-9]+\.[0-9]+\.[0-9]+-[0-9]+/${platform}/Antigravity%20IDE\.tar\.gz$ ]]; then
+	echo "Could not parse the Antigravity IDE download page." >&2
 	exit 1
 fi
 
-case "$platform" in
-linux-x64) expected_top_dir="Antigravity-x64" ;;
-linux-arm) expected_top_dir="Antigravity-arm64" ;;
-esac
-
-expected_target="$install_root/$expected_top_dir/antigravity"
-sandbox_path="$install_root/$expected_top_dir/chrome-sandbox"
+expected_target="$install_root/$install_dir/antigravity-ide"
+legacy_expected_target="$install_root/$archive_top_dir/antigravity-ide"
+sandbox_path="$install_root/$install_dir/chrome-sandbox"
 root_owned=no
 root_legacy_owned=no
 if [ -L "$install_root" ] || { [ -e "$install_root" ] && [ ! -d "$install_root" ]; }; then
@@ -273,7 +259,8 @@ if [ -L "$install_root" ] || { [ -e "$install_root" ] && [ ! -d "$install_root" 
 elif [ -d "$install_root" ]; then
 	if [ -f "$root_marker" ] && [ "$(cat "$root_marker")" = "$managed_id" ]; then
 		root_owned=yes
-	elif [ -f "$install_root/.linuxcapable-version" ] && [ -x "$expected_target" ]; then
+	elif [ -f "$install_root/.linuxcapable-version" ] &&
+		{ [ -x "$expected_target" ] || [ -x "$legacy_expected_target" ]; }; then
 		root_owned=yes
 		root_legacy_owned=yes
 	else
@@ -286,13 +273,13 @@ installed_version=$(cat "$install_root/.linuxcapable-version" 2>/dev/null || tru
 desktop_matches=no
 if [ -f "$desktop_file" ] &&
 	grep -Fqx "Exec=$command_link %U" "$desktop_file" &&
-	grep -q '^Icon=antigravity$' "$desktop_file" &&
-	grep -q '^StartupWMClass=Antigravity$' "$desktop_file"; then
+	grep -q '^Icon=antigravity-ide$' "$desktop_file" &&
+	grep -q '^StartupWMClass=antigravity-ide$' "$desktop_file"; then
 	desktop_matches=yes
 fi
 payload_permissions_ok=no
-if [ -d "$install_root/$expected_top_dir" ] &&
-	! find "$install_root/$expected_top_dir" -xdev \
+if [ -d "$install_root/$install_dir" ] &&
+	! find "$install_root/$install_dir" -xdev \
 		\( -type d ! -perm -0005 -o -type f ! -perm -0004 \) \
 		-print -quit | grep -q . &&
 	find "$expected_target" -maxdepth 0 -type f -perm -0001 -print -quit | grep -q .; then
@@ -300,7 +287,7 @@ if [ -d "$install_root/$expected_top_dir" ] &&
 fi
 if [ "$installed_version" = "$version" ] &&
 	[ -x "$expected_target" ] &&
-	[ "$(stat -c '%U:%G:%a' "$install_root/$expected_top_dir")" = "root:root:755" ] &&
+	[ "$(stat -c '%U:%G:%a' "$install_root/$install_dir")" = "root:root:755" ] &&
 	[ "$payload_permissions_ok" = yes ] &&
 	[ -L "$command_link" ] &&
 	[ "$(readlink -f "$command_link")" = "$expected_target" ] &&
@@ -314,14 +301,14 @@ if [ "$installed_version" = "$version" ] &&
 		if [ "$desktop_legacy_owned" = yes ]; then
 			printf 'X-LinuxCapable-Managed=%s\n' "$managed_id" >>"$desktop_file"
 		fi
-		printf 'Antigravity %s is already installed at %s\n' "$version" "$install_root/$expected_top_dir"
+		printf 'Antigravity IDE %s is already installed at %s\n' "$version" "$install_root/$install_dir"
 		exit 0
 	fi
 fi
 
-printf 'Downloading Antigravity %s for %s...\n' "$version" "$platform"
+printf 'Downloading Antigravity IDE %s for %s...\n' "$version" "$platform"
 curl -fsSL --proto '=https' --proto-redir '=https' --retry 3 -o "$archive" "$download_url"
-python3 - "$archive" "$expected_top_dir" <<'PY'
+python3 - "$archive" "$archive_top_dir" <<'PY'
 import sys
 import tarfile
 from pathlib import PurePosixPath
@@ -345,61 +332,40 @@ if top_dirs != {expected_top}:
 PY
 tar -tzf "$archive" >"$archive_list"
 top_dir=$(sed -n '1{s#/.*##;p;q}' "$archive_list")
-case "$top_dir" in
-Antigravity-*) ;;
-*)
-	echo "Unexpected archive layout: $top_dir" >&2
-	exit 1
-	;;
-esac
-if [ "$top_dir" != "$expected_top_dir" ]; then
+if [ "$top_dir" != "$archive_top_dir" ]; then
 	echo "Unexpected archive directory: $top_dir" >&2
 	exit 1
 fi
 
 tar --no-same-owner --no-same-permissions -xzf "$archive" -C "$tmpdir"
-chmod -R a-s -- "$tmpdir/$top_dir"
-if find "$tmpdir/$top_dir" -xdev -perm /6000 -print -quit | grep -q .; then
-	echo 'The extracted Antigravity archive still contains a set-ID path.' >&2
+chmod -R a-s -- "$tmpdir/$archive_top_dir"
+if find "$tmpdir/$archive_top_dir" -xdev -perm /6000 -print -quit | grep -q .; then
+	echo 'The extracted Antigravity IDE archive still contains a set-ID path.' >&2
 	exit 1
 fi
-if [ ! -x "$tmpdir/$top_dir/antigravity" ]; then
-	echo "The Antigravity launcher was not found in the archive." >&2
+if [ ! -x "$tmpdir/$archive_top_dir/antigravity-ide" ]; then
+	echo "The Antigravity IDE launcher was not found in the archive." >&2
 	exit 1
 fi
 
-python3 - "$tmpdir/$top_dir/resources/app.asar" "$icon_staged" <<'PY'
-import json
-import struct
-import sys
-from pathlib import Path
-
-asar = Path(sys.argv[1])
-output = Path(sys.argv[2])
-with asar.open("rb") as archive:
-    archive.read(4)
-    header_size = struct.unpack("<I", archive.read(4))[0]
-    archive.read(4)
-    json_size = struct.unpack("<I", archive.read(4))[0]
-    header = json.loads(archive.read(json_size).decode())
-
-icon = header["files"]["icon.png"]
-with asar.open("rb") as archive:
-    archive.seek(8 + header_size + int(icon["offset"]))
-    output.write_bytes(archive.read(int(icon["size"])))
-PY
+icon_source="$tmpdir/$archive_top_dir/resources/app/resources/linux/code.png"
+if [ ! -f "$icon_source" ]; then
+	echo "The Antigravity IDE icon was not found in the archive." >&2
+	exit 1
+fi
 
 cat >"$desktop_staged" <<DESKTOP
 [Desktop Entry]
-Name=Antigravity
-Comment=Google Antigravity 2.0 agent platform
+Name=Antigravity IDE
+Comment=Google Antigravity IDE
 Exec=$command_link %U
-Icon=antigravity
+Icon=antigravity-ide
 Terminal=false
 Type=Application
 Categories=Development;IDE;
+MimeType=x-scheme-handler/antigravity-ide;application/x-antigravity-workspace;
 StartupNotify=true
-StartupWMClass=Antigravity
+StartupWMClass=antigravity-ide
 X-LinuxCapable-Managed=$managed_id
 DESKTOP
 desktop-file-validate "$desktop_staged"
@@ -407,19 +373,20 @@ desktop-file-validate "$desktop_staged"
 stage_root=$(mktemp -d "${install_root}.new.XXXXXX")
 chmod 0755 "$stage_root"
 printf '%s\n' "$managed_id" >"$stage_root/.linuxcapable-managed"
-cp -a "$tmpdir/$top_dir" "$stage_root/"
-chmod -R a+rX -- "$stage_root/$top_dir"
-chown root:root "$stage_root/$top_dir"
-chmod 0755 "$stage_root/$top_dir"
+mkdir -p "$stage_root/$install_dir"
+cp -a "$tmpdir/$archive_top_dir/." "$stage_root/$install_dir/"
+chmod -R a+rX -- "$stage_root/$install_dir"
+chown root:root "$stage_root/$install_dir"
+chmod 0755 "$stage_root/$install_dir"
 printf '%s\n' "$version" >"$stage_root/.linuxcapable-version"
-if [ ! -f "$stage_root/$top_dir/chrome-sandbox" ] || [ -L "$stage_root/$top_dir/chrome-sandbox" ]; then
-	echo 'The staged Antigravity Chromium sandbox helper is missing or invalid.' >&2
+if [ ! -f "$stage_root/$install_dir/chrome-sandbox" ] || [ -L "$stage_root/$install_dir/chrome-sandbox" ]; then
+	echo 'The staged Antigravity IDE Chromium sandbox helper is missing or invalid.' >&2
 	exit 1
 fi
-chown root:root "$stage_root/$top_dir/chrome-sandbox"
-chmod 4755 "$stage_root/$top_dir/chrome-sandbox"
-if [ ! -x "$stage_root/$top_dir/antigravity" ]; then
-	echo 'The staged Antigravity launcher is not executable.' >&2
+chown root:root "$stage_root/$install_dir/chrome-sandbox"
+chmod 4755 "$stage_root/$install_dir/chrome-sandbox"
+if [ ! -x "$stage_root/$install_dir/antigravity-ide" ]; then
+	echo 'The staged Antigravity IDE launcher is not executable.' >&2
 	exit 1
 fi
 if [ -d "$install_root" ]; then
@@ -430,10 +397,10 @@ fi
 mv -- "$stage_root" "$install_root"
 stage_root=''
 new_root_installed=yes
-ln -sfn "$install_root/$top_dir/antigravity" "$command_link"
+ln -sfn "$install_root/$install_dir/antigravity-ide" "$command_link"
 
 mkdir -p "$(dirname "$icon_file")"
-install -m 0644 "$icon_staged" "$icon_file"
+install -m 0644 "$icon_source" "$icon_file"
 install -m 0644 "$desktop_staged" "$desktop_file"
 
 if command -v update-desktop-database >/dev/null 2>&1; then
@@ -445,44 +412,44 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
 fi
 
 payload_permissions_ok=no
-if ! find "$install_root/$top_dir" -xdev \
+if ! find "$install_root/$install_dir" -xdev \
 	\( -type d ! -perm -0005 -o -type f ! -perm -0004 \) \
 	-print -quit | grep -q . &&
-	find "$install_root/$top_dir/antigravity" -maxdepth 0 \
+	find "$install_root/$install_dir/antigravity-ide" -maxdepth 0 \
 		-type f -perm -0001 -print -quit | grep -q .; then
 	payload_permissions_ok=yes
 fi
-if [ ! -x "$install_root/$top_dir/antigravity" ] ||
-   [ "$(stat -c '%U:%G:%a' "$install_root/$top_dir")" != "root:root:755" ] ||
+if [ ! -x "$install_root/$install_dir/antigravity-ide" ] ||
+   [ "$(stat -c '%U:%G:%a' "$install_root/$install_dir")" != "root:root:755" ] ||
    [ "$payload_permissions_ok" != yes ] ||
    [ ! -L "$command_link" ] ||
-   [ "$(readlink -f "$command_link")" != "$install_root/$top_dir/antigravity" ] ||
+   [ "$(readlink -f "$command_link")" != "$install_root/$install_dir/antigravity-ide" ] ||
    ! grep -Fqx "X-LinuxCapable-Managed=$managed_id" "$desktop_file" ||
    [ ! -f "$icon_file" ]; then
-  echo 'Final Antigravity integration checks failed.' >&2
+  echo 'Final Antigravity IDE integration checks failed.' >&2
   exit 1
 fi
 if [ ! -f "$sandbox_path" ] || [ -L "$sandbox_path" ] ||
    [ "$(stat -c '%U:%G:%a' "$sandbox_path")" != 'root:root:4755' ]; then
-  echo 'Final Antigravity sandbox check failed.' >&2
+  echo 'Final Antigravity IDE sandbox check failed.' >&2
   exit 1
 fi
 
 committed=yes
-printf 'Installed Antigravity %s at %s\n' "$version" "$install_root/$top_dir"
+printf 'Installed Antigravity IDE %s at %s\n' "$version" "$install_root/$install_dir"
 EOF
 
 bash -n "$helper_tmp"
 sudo install -m 0755 "$helper_tmp" "$helper_path"
 echo "Helper installed at $helper_path"
 
-# --- Install / Update Antigravity ---
-echo "[3/4] Installing Antigravity..."
-sudo update-antigravity
+# --- Install / Update Antigravity IDE ---
+echo "[3/4] Installing Antigravity IDE..."
+sudo update-antigravity-ide
 
 # --- Verification ---
 echo "[4/4] Verifying installation..."
-launcher=$(readlink -f /usr/local/bin/antigravity)
+launcher=$(readlink -f /usr/local/bin/antigravity-ide)
 if test -x "$launcher"; then
   echo "  Launcher: $launcher (OK)"
 else
@@ -490,7 +457,7 @@ else
   exit 1
 fi
 
-if test -f /usr/share/icons/hicolor/512x512/apps/antigravity.png; then
+if test -f /usr/share/icons/hicolor/512x512/apps/antigravity-ide.png; then
   echo "  Icon: installed (OK)"
 else
   echo "  Icon: NOT FOUND" >&2
@@ -499,11 +466,11 @@ fi
 
 echo ""
 echo "Desktop file entries:"
-grep -E '^(Name|Exec|Icon|Categories|StartupWMClass)=' /usr/share/applications/antigravity.desktop
+grep -E '^(Name|Exec|Icon|Categories|StartupWMClass)=' /usr/share/applications/antigravity-ide.desktop
 
 echo ""
 echo "Sandbox permissions:"
-stat -c '%U %G %a %n' /opt/antigravity/Antigravity-*/chrome-sandbox
+stat -c '%U %G %a %n' /opt/antigravity-ide/Antigravity-IDE/chrome-sandbox
 
 echo ""
-echo "=== Antigravity installed successfully ==="
+echo "=== Antigravity IDE installed successfully ==="
